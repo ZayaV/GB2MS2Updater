@@ -1,10 +1,9 @@
 ﻿using System;
-using System.IO;
 using System.Reflection;
 
 namespace GB2MS2Updater
 {
-    class Program
+    internal class Program
     {
         static void Main(string[] args)
         {
@@ -17,7 +16,7 @@ namespace GB2MS2Updater
                 bool verbose = false;
                 bool filesOnly = false;
                 int argParseState = 0;
-                
+
                 foreach (string arg in args)
                 {
                     if (arg.StartsWith("-"))
@@ -27,6 +26,7 @@ namespace GB2MS2Updater
                             ShowUsage();
                             return;
                         }
+
                         switch (arg.ToLower())
                         {
                             case "-c":
@@ -45,7 +45,7 @@ namespace GB2MS2Updater
                                 forceUpdate = true;
                                 break;
 
-                            case "-filesonly":
+                            case "-q":
                                 filesOnly = true;
                                 break;
 
@@ -92,7 +92,8 @@ namespace GB2MS2Updater
 
                 DateTime startDateTime = DateTime.Now;
 
-                var updater = new GB2MS2Updater(comPort, Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), @"MaerklinCS2\CS2\update"), deviceType, verbose);
+                GB2MS2Updater updater = new GB2MS2Updater(comPort, firmwarePath, deviceType, verbose);
+
                 if (filesOnly)
                 {
                     updater.UpdateMS2Files();
@@ -114,13 +115,13 @@ namespace GB2MS2Updater
         static void ShowUsage()
         {
             Console.WriteLine("Märklin Firmware Updater for the MS2 and GB2 V{0}\n", Assembly.GetExecutingAssembly().GetName().Version);
-            Console.WriteLine("Usage: {0} -p <ComPort> -f <FirmwarePath> -d <DeviceType>\n", Assembly.GetExecutingAssembly().GetName().Name);
+            Console.WriteLine("Usage: {0} -c <ComPort> -p <FirmwarePath> -d <DeviceType>\n", Assembly.GetExecutingAssembly().GetName().Name);
             Console.WriteLine();
             Console.WriteLine("         -c <ComPort>           Name of the serial port where the SerialCAN adapter is present");
             Console.WriteLine("         -p <FirmwarePath>      File path where the firmware update files are located");
             Console.WriteLine("         -d <DeviceType>        DeviceType which has to be updated. Valid values: 'MS2' or 'GB2'");
             Console.WriteLine("         -f                     Force update even if device has already the same version");
-            Console.WriteLine("         -filesonly             Only update MS2 files");
+            Console.WriteLine("         -q                     Only update MS2 files");
             Console.WriteLine("         -v                     Verbose output");
             Console.WriteLine();
             Console.WriteLine("Example: {0} -c COM5 -d MS2 -p .\\cs3update_v2.10.btrfs\\usr\\local\\cs3\\update", Assembly.GetExecutingAssembly().GetName().Name);

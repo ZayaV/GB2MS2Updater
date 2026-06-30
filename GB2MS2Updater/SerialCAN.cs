@@ -42,35 +42,6 @@ namespace SerialCAN
             ReceiveData();
         }
 
-        private void ReadLoop(Object stateInfo)
-        {
-            byte[] buffer = new byte[4096];
-            while (true)
-            {
-                try
-                {
-                    int bytesRead = serialPort.Read(buffer, 0, buffer.Length);
-                    //Replace stupid control characters: '\a' (BEL) will get '=\r' with so we can easily parse that ugly stuff
-                    pendingData += Encoding.ASCII.GetString(buffer, 0, bytesRead).Replace("\a", "=\r").Replace('\r', '%');
-
-                    string[] lines = Regex.Split(pendingData, "(%)");
-                    int removeLength = 0;
-                    foreach (string line in lines)
-                    {
-                        if (line.Length > 0)
-                        {
-                            ProcessReceivedDataLine(line);
-                            //remove processed data
-                            removeLength += line.Length;
-                        }
-                    }
-
-                    pendingData = pendingData.Remove(0, removeLength);
-                }
-                catch (TimeoutException) { }
-            }
-        }
-
         public void ConfigureCANBitrate(CANBitrate canBitrate)
         {
             switch (canBitrate)
@@ -120,9 +91,9 @@ namespace SerialCAN
                 SendData(string.Empty);
                 Thread.Sleep(500);
             }
-            
+
             //Enable auto Polling
-            SendData("X1");
+            //SendData("X1");
             //Open CAN
             SendData("O");
             Thread.Sleep(200);
@@ -146,6 +117,7 @@ namespace SerialCAN
                 serialCanMessage.Append(canMessage.IsRTR ? "r" : "t");
                 serialCanMessage.Append(canMessage.Id.ToString("X03"));
             }
+
             if (canMessage.Data != null && canMessage.Data.Length > 0)
             {
                 serialCanMessage.Append(canMessage.Data.Length.ToString("X"));
@@ -154,6 +126,7 @@ namespace SerialCAN
             {
                 serialCanMessage.Append("0");
             }
+
             if (!canMessage.IsRTR)
             {
                 serialCanMessage.Append(canMessage.Data.ByteArrayToHexString());
@@ -176,26 +149,25 @@ namespace SerialCAN
             serialPort.BaseStream.Flush();
         }
 
-
         private void ReceiveData()
         {
-                //Replace stupid control characters: '\a' (BEL) will get '=\r' with so we can easily parse that ugly stuff
-                var serialData = serialPort.ReadExisting().Replace("\a", "=\r").Replace('\r', '%');
-                pendingData += serialData;
+            //Replace stupid control characters: '\a' (BEL) will get '=\r' with so we can easily parse that ugly stuff
+            var serialData = serialPort.ReadExisting().Replace("\a", "=\r").Replace('\r', '%');
+            pendingData += serialData;
 
-                string[] lines = Regex.Split(pendingData, "(%)");
-                int removeLength = 0;
-                foreach(string line in lines)
+            string[] lines = Regex.Split(pendingData, "(%)");
+            int removeLength = 0;
+            foreach (string line in lines)
+            {
+                if (line.Length > 0)
                 {
-                    if (line.Length > 0)
-                    {
-                        ProcessReceivedDataLine(line);
-                        //remove processed data
-                        removeLength += line.Length;
-                    }
+                    ProcessReceivedDataLine(line);
+                    //remove processed data
+                    removeLength += line.Length;
                 }
+            }
 
-                pendingData = pendingData.Remove(0, removeLength);
+            pendingData = pendingData.Remove(0, removeLength);
         }
 
         private void ProcessReceivedDataLine(string dataLine)
@@ -206,7 +178,7 @@ namespace SerialCAN
                 AckReceivedAutoResetEvent.Set();
             }
             else if (dataLine == "=")
-            { 
+            {
                 NakReceived = true;
                 AckReceivedAutoResetEvent.Set();
             }
@@ -221,7 +193,7 @@ namespace SerialCAN
                     case 'R':
                         ParseCANMessage(dataLine);
                         break;
-    
+
                     default:
                         //Unknown - ignore
                         break;
@@ -235,12 +207,14 @@ namespace SerialCAN
             {
                 throw new ArgumentException();
             }
+
             switch (dataLine[0])
             {
                 case 'T':
                 case 'R':
                     //Extended frame
                     CANMessage msg = new CANMessage();
+
                     if (dataLine.Length >= 10)
                     {
                         //parse address (8 HEX characters)
@@ -248,12 +222,13 @@ namespace SerialCAN
                         msg.IsRTR = dataLine[0] == 'R';
                         msg.Id = UInt32.Parse(dataLine.Substring(1, 8), System.Globalization.NumberStyles.HexNumber);
                         int dataLength = UInt16.Parse(dataLine.Substring(9, 1), System.Globalization.NumberStyles.HexNumber);
+
                         if (!msg.IsRTR && dataLength > 0)
                         {
                             //parse data
                             if (dataLine.Length == 10 + dataLength * 2)
                             {
-                                msg.Data = dataLine.Substring(10, dataLength*2).HexStringToByteArray();
+                                msg.Data = dataLine.Substring(10, dataLength * 2).HexStringToByteArray();
                             }
                             else
                             {
@@ -265,12 +240,12 @@ namespace SerialCAN
                         {
                             msg.Data = new byte[0];
                         }
-                        
+
                         if (Verbose)
                         {
                             Console.WriteLine("--> {0}", msg.ToString());
                         }
-                        
+
                         CANMessageReceived?.Invoke(this, new CANMessageReceivedEventArgs() { CANMessage = msg });
                     }
                     else
@@ -278,11 +253,12 @@ namespace SerialCAN
                         //Ignore illegal format
                     }
                     break;
-                
+
                 case 't':
                 case 'r':
                     //Basic frame
                     msg = new CANMessage();
+
                     if (dataLine.Length >= 5)
                     {
                         //parse address (3 HEX characters)
@@ -290,6 +266,7 @@ namespace SerialCAN
                         msg.IsRTR = dataLine[0] == 'r';
                         msg.Id = UInt32.Parse(dataLine.Substring(1, 3), System.Globalization.NumberStyles.HexNumber);
                         int dataLength = UInt16.Parse(dataLine.Substring(4, 1), System.Globalization.NumberStyles.HexNumber);
+
                         if (!msg.IsRTR && dataLength > 0)
                         {
                             //parse data
@@ -312,21 +289,12 @@ namespace SerialCAN
                     {
                         throw new FormatException();
                     }
+
                     CANMessageReceived?.Invoke(this, new CANMessageReceivedEventArgs() { CANMessage = msg });
                     break;
 
-
                 default:
                     throw new ArgumentException();
-            }
-        }
-
-        private void WaitForOk(int timeoutMilliseconds)
-        {
-            bool success = AckReceivedAutoResetEvent.WaitOne(timeoutMilliseconds);
-            if(!success || NakReceived)
-            {
-                throw new TimeoutException("No ACK received!");
             }
         }
     }

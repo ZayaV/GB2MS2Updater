@@ -10,6 +10,6 @@
         Kbit250,
         Kbit500,
         Kbit800,
-        Kbit1000,
+        Kbit1000
     }
 }
